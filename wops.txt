@@ -1,0 +1,205 @@
+
+select f.film_id,f.title,c.name
+from film f
+join film_category fc on f.film_id = fc.film_id
+join category c on fc.category_id =fc.category_id
+where f.length >120
+
+select 
+concat(s.first_name, ' ', s.last_name) as nama_lengkap, 
+s.email, 
+a.address
+from staff s
+join store st on s.store_id = st.store_id
+join address a on st.address_id = a.address_id;
+
+select f.title, f.rental_rate, f.length
+from film f
+order by rental_rate asc
+limit 5 
+
+select 
+distinct concat (c.first_name,' ',c.last_name) as nama_lengkap, c.email
+from customer c
+join rental r on c.customer_id = r.customer_id
+where r.return_date is null;
+
+select s.first_name, s.last_name, sum(p.amount) as total_pembayaran
+from staff s
+join payment p on s.staff_id = p.staff_id
+group by s.staff_id
+order by total_pembayaran desc;
+
+select first_name, last_name, email
+from customer
+where customer_id in (
+select r.customer_id
+from rental r
+join inventory i on r.inventory_id = i.inventory_id
+join film_category fc on i.film_id = fc.film_id
+join category c on fc.category_id = c.category_id
+where c.name = 'action'
+);
+
+delimiter //
+
+create procedure getfilmbycategory(in kategori_input varchar(50))
+begin
+    select f.title, c.name as category
+    from film f
+    join film_category fc on f.film_id = fc.film_id
+    join category c on fc.category_id = c.category_id
+    where c.name = kategori_input;
+end //
+
+delimiter ;
+
+delimiter //
+
+create procedure gettotallatefee(in cust_id int)
+begin
+    select 
+        sum(case 
+            when datediff(r.return_date, date_add(r.rental_date, interval f.rental_duration day)) > 0 
+            then datediff(r.return_date, date_add(r.rental_date, interval f.rental_duration day)) * 5000 
+            else 0 
+        end) as total_denda
+    from rental r
+    join inventory i on r.inventory_id = i.inventory_id
+    join film f on i.film_id = f.film_id
+    where r.customer_id = cust_id;
+end //
+
+delimiter ;
+
+create view view_detail_pelanggan as
+select 
+    c.first_name, 
+    c.last_name, 
+    c.email, 
+    a.address, 
+    ci.city, 
+    a.phone
+from customer c
+join address a on c.address_id = a.address_id
+join city ci on a.city_id = ci.city_id;
+
+================================================================
+
+a. nama aktor dalam film yang sama
+
+sql
+select f.title, a.first_name, a.last_name
+from film f
+join film_actor fa on f.film_id = fa.film_id
+join actor a on fa.actor_id = a.actor_id
+order by f.title;
+
+b. nama aktor dengan kategori filmnya
+
+sql
+select a.first_name, a.last_name, c.name as category
+from actor a
+join film_actor fa on a.actor_id = fa.actor_id
+join film_category fc on fa.film_id = fc.film_id
+join category c on fc.category_id = c.category_id;
+
+c. pelanggan yang melewati batas pengembalian (overdue)
+
+sql
+select c.first_name, c.last_name, a.phone, f.title
+from customer c
+join rental r on c.customer_id = r.customer_id
+join inventory i on r.inventory_id = i.inventory_id
+join film f on i.film_id = f.film_id
+join address a on c.address_id = a.address_id
+where r.return_date is null 
+and datediff(current_date, r.rental_date) > f.rental_duration;
+
+d. jumlah film 'hunchback impossible' di gudang
+
+sql
+select f.title, count(i.inventory_id) as jumlah_stok
+from film f
+join inventory i on f.film_id = i.film_id
+where f.title = 'hunchback impossible'
+group by f.title;
+
+e. film yang paling sering disewa
+
+sql
+select f.title, count(r.rental_id) as frekuensi
+from film f
+join inventory i on f.film_id = i.film_id
+join rental r on i.inventory_id = r.inventory_id
+group by f.title
+order by frekuensi desc;
+
+f. total pembayaran per pelanggan (diurutkan berdasarkan last name)
+
+sql
+select c.first_name, c.last_name, sum(p.amount) as total_bayar
+from customer c
+join payment p on c.customer_id = p.customer_id
+group by c.customer_id
+order by c.last_name asc;
+
+g. nested query: aktor dalam film 'alone trip'
+
+sql
+select first_name, last_name
+from actor
+where actor_id in (
+    select actor_id 
+    from film_actor 
+    where film_id = (select film_id from film where title = 'alone trip')
+);
+
+
+2. stored procedure
+a. menambah data pada tabel film
+
+sql
+delimiter //
+create procedure addfilm(
+    in p_title varchar(255),
+    in p_desc text,
+    in p_release_year year,
+    in p_rental_duration tinyint,
+    in p_rental_rate decimal(4,2)
+)
+begin
+    insert into film (title, description, release_year, rental_duration, rental_rate)
+    values (p_title, p_desc, p_release_year, p_rental_duration, p_rental_rate);
+end //
+delimiter ;
+
+
+b. menghapus data pada tabel actor
+
+sql
+delimiter //
+create procedure deleteactor(in p_actor_id int)
+begin
+    delete from actor where actor_id = p_actor_id;
+end //
+delimiter ;
+
+
+3. view untuk staff
+view daftar staff, alamat, dan informasi toko:
+
+sql
+create view view_staff_info as
+select 
+    s.first_name, 
+    s.last_name, 
+    a.address, 
+    a.district, 
+    ci.city, 
+    st.store_id
+from staff s
+join address a on s.address_id = a.address_id
+join city ci on a.city_id = ci.city_id
+join store st on s.store_id = st.store_id;
+
